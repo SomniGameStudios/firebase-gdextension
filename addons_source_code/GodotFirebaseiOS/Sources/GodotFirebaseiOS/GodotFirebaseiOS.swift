@@ -1,5 +1,9 @@
 import SwiftGodotRuntime
 
-#initSwiftExtension(cdecl: "swift_entry_point", types: [
-    FirebaseAuthPlugin.self
-], registerDocs: false)
+#initSwiftExtension(
+    cdecl: "swift_entry_point", 
+    types: [
+        FirebaseAuthPlugin.self
+    ],
+    registerDocs: false
+)
