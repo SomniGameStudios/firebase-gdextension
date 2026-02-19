@@ -1,0 +1,218 @@
+import SwiftGodotRuntime
+import FirebaseCore
+import FirebaseAuth
+import GoogleSignIn
+#if canImport(UIKit)
+import UIKit
+#endif
+
+@Godot
+class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
+    // Signals (same names as Android for wrapper compatibility)
+    @Signal var firebase_initialized: SimpleSignal
+    @Signal("message") var firebase_error: SignalWithArguments<String>
+    @Signal("user_json") var auth_success: SignalWithArguments<String>
+    @Signal("message") var auth_error: SignalWithArguments<String>
+    @Signal var signed_out: SimpleSignal
+
+    private var isInitialized = false
+
+    @Callable
+    func initialize() {
+        guard !isInitialized else { return }
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
+        } else {
+            FirebaseApp.configure()
+        }
+        isInitialized = true
+        firebase_initialized.emit()
+    }
+
+    // MARK: - Anonymous Auth
+
+    @Callable
+    func sign_in_anonymously() {
+        guard isInitialized else {
+            auth_error.emit("Firebase not initialized")
+            return
+        }
+        // If a user is already signed in, return their data instead of creating a new session
+        if let existingUser = Auth.auth().currentUser {
+            auth_success.emit(userToJson(existingUser))
+            return
+        }
+        Auth.auth().signInAnonymously { [weak self] result, error in
+            guard let self else { return }
+            if let error {
+                self.auth_error.emit(error.localizedDescription)
+                return
+            }
+            guard let user = result?.user else { return }
+            self.auth_success.emit(self.userToJson(user))
+        }
+    }
+
+    // MARK: - Google Sign-In
+
+    @Callable
+    func sign_in_with_google() {
+        guard isInitialized else {
+            auth_error.emit("Firebase not initialized")
+            return
+        }
+        performGoogleSignIn { [weak self] credential, error in
+            guard let self else { return }
+            if let error {
+                self.auth_error.emit(error)
+                return
+            }
+            guard let credential else { return }
+            Auth.auth().signIn(with: credential) { [weak self] result, error in
+                guard let self else { return }
+                if let error {
+                    self.auth_error.emit(error.localizedDescription)
+                    return
+                }
+                guard let user = result?.user else { return }
+                self.auth_success.emit(self.userToJson(user))
+            }
+        }
+    }
+
+    @Callable
+    func link_anonymous_with_google() {
+        guard isInitialized else {
+            auth_error.emit("Firebase not initialized")
+            return
+        }
+        guard let currentUser = Auth.auth().currentUser else {
+            auth_error.emit("No user signed in")
+            return
+        }
+        guard currentUser.isAnonymous else {
+            auth_error.emit("Current user is not anonymous. Use sign_in_with_google() instead")
+            return
+        }
+        performGoogleSignIn { [weak self] credential, error in
+            guard let self else { return }
+            if let error {
+                self.auth_error.emit(error)
+                return
+            }
+            guard let credential else { return }
+            currentUser.link(with: credential) { [weak self] result, error in
+                guard let self else { return }
+                if let error {
+                    let nsError = error as NSError
+                    // Already linked with this provider — treat as success
+                    if nsError.code == AuthErrorCode.providerAlreadyLinked.rawValue {
+                        self.auth_success.emit(self.userToJson(currentUser))
+                        return
+                    }
+                    self.auth_error.emit(error.localizedDescription)
+                    return
+                }
+                guard let user = result?.user else { return }
+                self.auth_success.emit(self.userToJson(user))
+            }
+        }
+    }
+
+    // MARK: - Sign Out
+
+    @Callable
+    func sign_out() {
+        do {
+            GIDSignIn.sharedInstance.signOut()
+            try Auth.auth().signOut()
+            signed_out.emit()
+        } catch {
+            auth_error.emit(error.localizedDescription)
+        }
+    }
+
+    // MARK: - User State
+
+    @Callable func is_signed_in() -> Bool { Auth.auth().currentUser != nil }
+    @Callable func is_anonymous() -> Bool { Auth.auth().currentUser?.isAnonymous ?? false }
+    @Callable func get_uid() -> String { Auth.auth().currentUser?.uid ?? "" }
+
+    @Callable
+    func get_current_user() -> String {
+        guard let user = Auth.auth().currentUser else { return "{}" }
+        return userToJson(user)
+    }
+
+    // MARK: - Private Helpers
+
+    private func performGoogleSignIn(completion: @escaping (AuthCredential?, String?) -> Void) {
+        #if os(iOS)
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            completion(nil, "Missing Firebase clientID")
+            return
+        }
+
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+        DispatchQueue.main.async {
+            guard let rootVC = self.topMostViewController() else {
+                completion(nil, "Could not find root view controller")
+                return
+            }
+            GIDSignIn.sharedInstance.signIn(withPresenting: rootVC) { result, error in
+                if let error {
+                    completion(nil, error.localizedDescription)
+                    return
+                }
+                guard let user = result?.user, let idToken = user.idToken else {
+                    completion(nil, "Google Sign-In failed: missing token")
+                    return
+                }
+                let credential = GoogleAuthProvider.credential(
+                    withIDToken: idToken.tokenString,
+                    accessToken: user.accessToken.tokenString
+                )
+                completion(credential, nil)
+            }
+        }
+        #else
+        completion(nil, "Google Sign-In is only available on iOS")
+        #endif
+    }
+
+    #if os(iOS)
+    @MainActor
+    private func topMostViewController() -> UIViewController? {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        else { return nil }
+        return findTopViewController(from: root)
+    }
+
+    private func findTopViewController(from vc: UIViewController) -> UIViewController {
+        if let nav = vc as? UINavigationController {
+            return findTopViewController(from: nav.visibleViewController ?? nav)
+        }
+        if let tab = vc as? UITabBarController {
+            return findTopViewController(from: tab.selectedViewController ?? tab)
+        }
+        if let presented = vc.presentedViewController {
+            return findTopViewController(from: presented)
+        }
+        return vc
+    }
+    #endif
+
+    private func userToJson(_ user: FirebaseAuth.User) -> String {
+        let email = user.email ?? ""
+        let displayName = user.displayName ?? ""
+        let photoURL = user.photoURL?.absoluteString ?? ""
+        return """
+        {"uid":"\(user.uid)","email":"\(email)","displayName":"\(displayName)","photoURL":"\(photoURL)","isAnonymous":\(user.isAnonymous)}
+        """
+    }
+}
