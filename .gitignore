@@ -1,3 +1,19 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Swift build artifacts
+*.d
+*.dia
+*.swiftdeps
+*.swiftmodule
+
+# Firebase config files (contain API keys)
+GoogleService-Info.plist
+google-services.json
+
+# Godot export config (contains signing credentials)
+export_presets.cfg
+
+# iOS export directory
+/ios/
