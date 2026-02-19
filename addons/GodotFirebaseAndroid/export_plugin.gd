@@ -23,7 +23,11 @@ func _exit_tree():
 	remove_export_plugin(export_plugin)
 	export_plugin = null
 
+func _enable_plugin() -> void:
+	add_autoload_singleton("Firebase", "res://addons/GodotFirebaseAndroid/Firebase.gd")
+
 func _disable_plugin() -> void:
+	remove_autoload_singleton("Firebase")
 	_cleanup_gradle_files()
 
 func _cleanup_gradle_files() -> void:
@@ -41,16 +45,16 @@ func _clean_line_from_file(file_path: String, line_to_remove: String) -> void:
 
 class AndroidExportPlugin extends EditorExportPlugin:
 	var _plugin_name = "GodotFirebaseAndroid"
-
+	
 	func _export_begin(features: PackedStringArray, is_debug: bool, path: String, flags: int) -> void:
 		if not features.has("android"):
 			return
-
+		
 		if (not get_option("gradle_build/use_gradle_build")) or (not FileAccess.file_exists("res://android/build/google-services.json")):
 			_clean_line_from_file("res://android/build/build.gradle", BUILD_GRADLE_PLUGIN_LINE)
 			_clean_line_from_file("res://android/build/settings.gradle", SETTINGS_GRADLE_PLUGIN_LINE)
 			return
-
+		
 		# Modify build.gradle and settings.gradle
 		_insert_line_if_missing("res://android/build/build.gradle", "id 'org.jetbrains.kotlin.android'", BUILD_GRADLE_PLUGIN_LINE)
 		_insert_line_if_missing("res://android/build/settings.gradle", "id 'org.jetbrains.kotlin.android' version versions.kotlinVersion", SETTINGS_GRADLE_PLUGIN_LINE)
@@ -59,11 +63,11 @@ class AndroidExportPlugin extends EditorExportPlugin:
 		var text := FileAccess.open(file_path, FileAccess.READ).get_as_text()
 		if text.contains(insert_line):
 			return
-
+		
 		var lines := text.split("\n")
 		var result := PackedStringArray()
 		var inserted := false
-
+		
 		for line in lines:
 			result.append(line)
 			if not inserted and line.strip_edges() == after_line.strip_edges():
@@ -75,7 +79,7 @@ class AndroidExportPlugin extends EditorExportPlugin:
 						break
 				result.append(indent + insert_line)
 				inserted = true
-
+		
 		var file := FileAccess.open(file_path, FileAccess.WRITE)
 		file.store_string("\n".join(result))
 		file.close()
