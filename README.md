@@ -1,38 +1,58 @@
-# Firebase iOS GDExtension Demo
+# Firebase Mobile Integration Demo
 
-A minimal Godot 4.6 demo showing Firebase Authentication on iOS via a **SwiftGodot GDExtension** plugin.
+A Godot 4.6 demo showing Firebase Authentication on **both iOS and Android** from a single project, using two different native plugin approaches:
+
+- **iOS**: SwiftGodot GDExtension (`FirebaseAuthPlugin` registered in ClassDB)
+- **Android**: Kotlin Engine singleton (`GodotFirebaseAndroid` via `Engine.get_singleton()`)
+
+A unified wrapper autoload detects the platform at runtime and delegates to the correct backend.
+
+## Purpose
 
 This project serves two purposes:
 
-1. **Demonstrate that integrating Firebase on iOS with SwiftGodot is simpler** than the [godot-mobile-plugins](https://github.com/godot-mobile-plugins/godot-firebase) approach — fewer files, less boilerplate, real typed classes instead of opaque singletons.
+1. **Demonstrate cross-platform Firebase integration** using a single Godot project with platform-specific native plugins. Shows that the SwiftGodot GDExtension approach for iOS is simpler (fewer files, less boilerplate, real typed classes) compared to the Engine singleton pattern used on Android.
 
 2. **Provide a reference for platform-specific GDExtension plugins** and the challenges discussed in [godotengine/godot#105615](https://github.com/godotengine/godot/issues/105615).
 
-Modeled after [GodotFirebaseAndroid](https://github.com/syntaxerror247/GodotFirebaseAndroid) by Anish Mishra.
+Built on top of [GodotFirebaseAndroid](https://github.com/syntaxerror247/GodotFirebaseAndroid) by Anish Mishra.
 
-## How It Works
+## Architecture
 
-The `GodotFirebaseiOS.framework` in `addons/GodotFirebaseiOS/` is a compiled SwiftGodot GDExtension that registers a `FirebaseAuthPlugin` class into Godot's ClassDB. The demo wraps it with a thin autoload ([autoload/firebase_auth_wrapper.gd](autoload/firebase_auth_wrapper.gd)) that:
+```
+autoload/firebase_wrapper.gd    ← "Firebase" autoload singleton
+    │
+    ├─ Android: Engine.has_singleton("GodotFirebaseAndroid")
+    │           → calls Java-style methods on Kotlin plugin
+    │
+    └─ iOS:    ClassDB.class_exists("FirebaseAuthPlugin")
+               → calls snake_case methods on SwiftGodot class
+```
 
-- Uses `ClassDB.class_exists()` + `ClassDB.instantiate()` so the script **parses without errors on non-iOS platforms**
-- Re-emits all signals for scene scripts to connect to
-- Provides safe no-op fallbacks when the plugin is unavailable (editor, desktop)
+### GDExtension vs Engine Singleton Comparison
 
-### GDExtension vs Engine Singleton (godot-mobile-plugins)
-
-| Aspect | godot-mobile-plugins (Singleton) | This demo (GDExtension) |
-|--------|----------------------------------|------------------------|
-| Registration | `Engine.get_singleton("PluginName")` | `ClassDB.class_exists("FirebaseAuthPlugin")` |
+| Aspect | Android (Engine Singleton) | iOS (GDExtension) |
+|--------|---------------------------|-------------------|
+| Registration | `Engine.get_singleton("Name")` | `ClassDB.class_exists("Name")` |
 | Instantiation | Opaque `Object` from Engine | `ClassDB.instantiate()` → typed `RefCounted` |
 | Method naming | Java-style (`signInAnonymously`) | Godot snake_case (`sign_in_anonymously`) |
 | Editor support | No autocomplete, no type info | RefCounted subclass, editor-friendly |
-| Boilerplate | Export plugin GDScript + module wrappers + Gradle injection | Single `.gdextension` file + framework |
+| Boilerplate | Export plugin + Gradle injection + AAR | Single `.gdextension` file + framework |
+| Signal data | Native `Dictionary` | JSON `String` |
 
 ## Requirements
 
+**Both platforms:**
 - Godot 4.4+
+- Firebase project with Authentication enabled
+
+**iOS:**
 - Xcode 15+, Swift 5.9+
-- iOS 17+ device or simulator (arm64)
+- iOS 17+ device (arm64)
+
+**Android:**
+- Android SDK, Gradle
+- Android device or emulator (arm64-v8a)
 
 ## Setup
 
@@ -40,57 +60,79 @@ The `GodotFirebaseiOS.framework` in `addons/GodotFirebaseiOS/` is a compiled Swi
 
 - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
 - Enable **Anonymous** and **Google Sign-In** providers under Authentication > Sign-in method
-- Register an iOS app with your bundle identifier
-- Download `GoogleService-Info.plist`
 
-### 2. Godot Project
+### 2. iOS Setup
 
-- Place `GoogleService-Info.plist` in your Godot project root (it will be copied to the iOS export)
-- Update `export_presets.cfg` with your bundle identifier
+- Register an iOS app in Firebase, download `GoogleService-Info.plist`
+- Place it in your Godot project root
+- After exporting from Godot, in the Xcode trampoline project add a `CFBundleURLTypes` entry with your `REVERSED_CLIENT_ID` from `GoogleService-Info.plist`
+- Build and deploy to device
 
-### 3. Xcode (after Godot export)
+### 3. Android Setup
 
-- Export the project for iOS from Godot
-- In the Xcode trampoline project, add a `CFBundleURLTypes` entry in Info.plist with your `REVERSED_CLIENT_ID` from `GoogleService-Info.plist` (required for Google Sign-In)
-- Build, archive, and deploy to device or TestFlight
+- Register an Android app in Firebase, download `google-services.json`
+- Place it in `android/build/google-services.json` (after creating the Android export template)
+- Enable Gradle build in export settings
+- Build and deploy to device
 
 ## GDScript API
 
-All methods are available through the `FirebaseAuth` autoload:
+All methods are available through the `Firebase` autoload:
 
 ```gdscript
-# Sign-in
-FirebaseAuth.sign_in_anonymously()
-FirebaseAuth.sign_in_with_google()
-FirebaseAuth.link_anonymous_with_google()
+# Sign-in (both platforms)
+Firebase.sign_in_anonymously()
+Firebase.sign_in_with_google()
+Firebase.link_anonymous_with_google()
+Firebase.sign_out_user()
+Firebase.is_signed_in()         # -> bool
+Firebase.get_current_user()     # -> String (JSON)
 
-# Query
-FirebaseAuth.is_signed_in()    # -> bool
-FirebaseAuth.is_anonymous()    # -> bool
-FirebaseAuth.get_uid()         # -> String
-FirebaseAuth.get_current_user() # -> String (JSON)
+# iOS only
+Firebase.is_anonymous()         # -> bool
+Firebase.get_uid()              # -> String
 
-# Sign-out
-FirebaseAuth.sign_out_user()
+# Android only
+Firebase.create_user_with_email_password(email, password)
+Firebase.sign_in_with_email_password(email, password)
+Firebase.send_password_reset_email(email)
+Firebase.send_email_verification()
+Firebase.delete_current_user()
+
+# Helpers
+Firebase.is_available()         # -> bool
+Firebase.get_platform_name()    # -> "Android" | "iOS" | "None"
 ```
 
 ### Signals
 
 ```gdscript
-FirebaseAuth.firebase_initialized   # Firebase ready
-FirebaseAuth.firebase_error(msg)    # Initialization error
-FirebaseAuth.auth_success(user_json) # Auth succeeded (JSON user data)
-FirebaseAuth.auth_error(msg)        # Auth failed
-FirebaseAuth.signed_out             # User signed out
+# Both platforms
+Firebase.auth_success(user_data: String)   # JSON user data
+Firebase.auth_error(message: String)
+Firebase.signed_out
+
+# Link-specific (Android emits separately, iOS uses auth_success/auth_error)
+Firebase.link_success(user_data: String)
+Firebase.link_error(message: String)
+
+# Android only
+Firebase.password_reset_sent(success: bool)
+Firebase.email_verification_sent(success: bool)
+Firebase.user_deleted(success: bool)
+
+# iOS only
+Firebase.firebase_initialized
+Firebase.firebase_error(message: String)
 ```
 
 ## Platform-Specific GDExtension Notes (godot#105615)
 
-This plugin only targets iOS — the `.gdextension` file only declares `ios.debug` and `ios.release` libraries. On non-iOS platforms:
+The iOS plugin uses a `.gdextension` file that only declares `ios.debug` and `ios.release` libraries. On non-iOS platforms:
 
 - The `FirebaseAuthPlugin` class is not registered in ClassDB
-- The autoload wrapper detects this via `ClassDB.class_exists()` and gracefully falls back to no-ops
-- **Known issue**: Godot's GDExtension loader may emit warnings about missing libraries for the current platform, even though the extension was never meant to run there. See [godotengine/godot#105615](https://github.com/godotengine/godot/issues/105615) for discussion.
+- The wrapper detects this via `ClassDB.class_exists()` and falls back gracefully
+- **Known issue**: Godot's GDExtension loader may emit warnings about missing libraries for the current platform. See [godotengine/godot#105615](https://github.com/godotengine/godot/issues/105615).
 
 ## License
 
