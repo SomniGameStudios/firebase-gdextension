@@ -20,12 +20,12 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Callable
     func initialize() {
         guard !isInitialized else { return }
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-        } else {
-            FirebaseApp.configure()
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let options = FirebaseOptions(contentsOfFile: path) else {
+            firebase_error.emit("GoogleService-Info.plist not found in app bundle. Add it to the Xcode project target.")
+            return
         }
+        FirebaseApp.configure(options: options)
         isInitialized = true
         firebase_initialized.emit()
     }
