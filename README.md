@@ -1,6 +1,10 @@
 # Firebase Mobile Integration Demo
 
-A Godot 4.6 demo showing Firebase Authentication on **both iOS and Android** from a single project, using two different native plugin approaches:
+A Godot 4.6 demo showing Firebase Authentication on **both iOS and Android** from a single project, using two different native plugin approaches.
+
+> **Project structure**: The Godot project lives in the [`demo/`](demo/) folder. Open `demo/project.godot` in the Godot editor. Native plugin source code is in [`addons_source_code/`](addons_source_code/).
+
+Firebase Authentication on both iOS and Android, using two different native plugin approaches:
 
 - **iOS**: SwiftGodot GDExtension (`FirebaseAuthPlugin` registered in ClassDB)
 - **Android**: Kotlin Engine singleton (`GodotFirebaseAndroid` via `Engine.get_singleton()`)
@@ -64,14 +68,14 @@ autoload/firebase_wrapper.gd    ← "Firebase" autoload singleton
 ### 2. iOS Setup
 
 - Register an iOS app in Firebase, download `GoogleService-Info.plist`
-- Place it in your Godot project root
+- Place it in the `demo/` folder (the Godot project root)
 - After exporting from Godot, in the Xcode trampoline project add a `CFBundleURLTypes` entry with your `REVERSED_CLIENT_ID` from `GoogleService-Info.plist`
 - Build and deploy to device
 
 ### 3. Android Setup
 
 - Register an Android app in Firebase, download `google-services.json`
-- Place it in `android/build/google-services.json` (after creating the Android export template)
+- Place it in `demo/android/build/google-services.json` (after creating the Android export template)
 - Enable Gradle build in export settings
 - Build and deploy to device
 
