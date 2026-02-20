@@ -12,9 +12,6 @@ release/
 demo/android/
 demo/ios/
 
-# Godot export config (contains signing credentials)
-export_presets.cfg
-
 # Firebase config files (contain API keys)
 GoogleService-Info.plist
 google-services.json
@@ -38,4 +35,4 @@ local.properties
 .idea/
 
 # macOS
-.DS_Store
+.DS_Store 
