@@ -17,15 +17,21 @@ GoogleService-Info.plist
 google-services.json
 
 # Swift build artifacts
+.build/
+.swiftpm/
 *.dia
 *.swiftdeps
 *.swiftmodule
+*.abi.json
 
 # iOS / Xcode
 *.d
 *.o
 *.dblite
 xcuserdata/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
 
 # Android / Gradle
 .gradle/
@@ -36,3 +42,4 @@ local.properties
 
 # macOS
 .DS_Store 
+/.claude

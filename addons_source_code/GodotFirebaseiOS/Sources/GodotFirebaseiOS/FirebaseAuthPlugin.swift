@@ -1,4 +1,4 @@
-import SwiftGodotRuntime
+@preconcurrency import SwiftGodotRuntime
 import FirebaseCore
 import FirebaseAuth
 import GoogleSignIn
@@ -45,12 +45,14 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
         }
         Auth.auth().signInAnonymously { [weak self] result, error in
             guard let self else { return }
-            if let error {
-                self.auth_error.emit(error.localizedDescription)
-                return
+            Task { @MainActor in
+                if let error {
+                    self.auth_error.emit(error.localizedDescription)
+                    return
+                }
+                guard let user = result?.user else { return }
+                self.auth_success.emit(self.userToJson(user))
             }
-            guard let user = result?.user else { return }
-            self.auth_success.emit(self.userToJson(user))
         }
     }
 
