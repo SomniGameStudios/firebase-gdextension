@@ -1,8 +1,11 @@
 # General
-*.lock
 *.log
 build/
 release/
+
+# macOS
+.DS_Store
+/.claude
 
 # Godot
 .godot/
@@ -19,15 +22,8 @@ google-services.json
 # Swift build artifacts
 .build/
 .swiftpm/
-*.dia
-*.swiftdeps
-*.swiftmodule
-*.abi.json
 
 # iOS / Xcode
-*.d
-*.o
-*.dblite
 xcuserdata/
 DerivedData/
 *.xcodeproj
@@ -39,7 +35,3 @@ local.properties
 
 # IDEs
 .idea/
-
-# macOS
-.DS_Store 
-/.claude

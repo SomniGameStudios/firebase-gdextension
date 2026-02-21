@@ -1,46 +1,98 @@
-# godot-firebase-ios (⚠️ WORK IN PROGRESS)
+# GodotFirebaseiOS — Swift Package
 
-Firebase Auth plugin for Godot 4 on iOS, built with SwiftGodot.
+Firebase Authentication plugin for Godot 4 on iOS, implemented as a SwiftGodot GDExtension.
 
-## Features
-- Anonymous Authentication
-- Google Sign-In
-- Link anonymous account to Google
+Part of [firebase-mobile-integration-demo](../../README.md) — see the main README for integration setup and GDScript API reference.
+
+---
+
+## What This Package Does
+
+Registers a `FirebaseAuthPlugin` class into Godot's ClassDB via SwiftGodot.
+The class is instantiated at runtime by `autoload/firebase_wrapper.gd` on iOS
+and exposes Firebase Authentication as `@Callable` functions and `@Signal` properties.
+
+---
 
 ## Requirements
-- Xcode 15+, Swift 5.9+, iOS 17+
 
-## Setup
+| Tool | Version |
+|------|---------|
+| Xcode | 15+ |
+| Swift | 5.9+ |
+| iOS deployment target | 17+ |
+| macOS (build machine) | 14+ |
 
-### 1. Firebase Console
-- Enable **Anonymous** and **Google Sign-In** providers in Authentication > Sign-in method.
-- Download `GoogleService-Info.plist` and place it in your Godot project's `ios/build/`.
+---
 
-### 2. URL Scheme (required for Google Sign-In)
-In the Xcode trampoline project, open `Stepland Proto-Info.plist` and add a `CFBundleURLTypes` entry with your `REVERSED_CLIENT_ID` value from `GoogleService-Info.plist`.
+## Package Dependencies
 
-### 3. Build the Framework
-1. Open this repo in Xcode.
+| Package | Requirement | Resolved |
+|---------|-------------|---------|
+| [SwiftGodot](https://github.com/migueldeicaza/SwiftGodot) | pinned revision `61f258c` | — |
+| [firebase-ios-sdk](https://github.com/firebase/firebase-ios-sdk) | >= 11.0.0 | 11.15.0 |
+| [GoogleSignIn-iOS](https://github.com/google/GoogleSignIn-iOS) | >= 9.1.0 | 9.1.0 |
+
+---
+
+## Building the Framework
+
+1. Open `Package.swift` in Xcode.
 2. Select the `GodotFirebaseiOS` scheme, set destination to **Any iOS Device (arm64)**.
-3. Build with **Product > Build** (Release).
-4. **Product > Show Build Folder in Finder**.
+3. Build with **Product → Build** (Release configuration).
+4. Open **Product → Show Build Folder in Finder**.
 5. Navigate to `Release-iphoneos/PackageFrameworks/GodotFirebaseiOS.framework`.
-6. Copy it into your Godot project's `addons/GodotFirebaseiOS/GodotFirebaseiOS.framework`.
+6. Copy it into `demo/addons/GodotFirebaseiOS/GodotFirebaseiOS.framework`, replacing the existing one.
 
-### 4. Export from Godot
-Export for iOS as usual. The `.gdextension` file in `addons/GodotFirebaseiOS/` loads the plugin automatically. Then open the Xcode trampoline project, archive, and upload to TestFlight.
+---
 
-## GDScript API
+## Source Structure
 
-All methods are available through the `FirebaseAuthWrapper` autoload:
-
-```gdscript
-FirebaseAuthWrapper.sign_in_anonymously()
-FirebaseAuthWrapper.sign_in_with_google()
-FirebaseAuthWrapper.link_anonymous_with_google()
-FirebaseAuthWrapper.sign_out()
-FirebaseAuthWrapper.is_signed_in()
-FirebaseAuthWrapper.get_uid()
+```
+Sources/GodotFirebaseiOS/
+├── GodotFirebaseiOS.swift      # SwiftGodot entry point — registers FirebaseAuthPlugin
+└── FirebaseAuthPlugin.swift    # @Godot class with all auth logic
 ```
 
-Signals: `auth_success(user_data)`, `auth_error(message)`, `signed_out()`
+### Callables registered on `FirebaseAuthPlugin`
+
+| Method | Description |
+|--------|-------------|
+| `initialize()` | Loads `GoogleService-Info.plist` and configures `FirebaseApp` |
+| `sign_in_anonymously()` | Anonymous auth |
+| `sign_in_with_google()` | Google OAuth via `GIDSignIn` |
+| `link_anonymous_with_google()` | Upgrades anonymous account to Google |
+| `sign_out()` | Signs out from Firebase and Google |
+| `delete_current_user()` | Deletes the current Firebase user |
+| `is_signed_in() → Bool` | Returns true if a user session exists |
+| `get_current_user_data() → GDictionary` | Returns `uid`, `email`, `displayName`, `photoURL`, `isAnonymous` |
+
+### Signals emitted by `FirebaseAuthPlugin`
+
+| Signal | Payload | Notes |
+|--------|---------|-------|
+| `firebase_initialized` | — | Internal; consumed by wrapper |
+| `firebase_error(message)` | `String` | Internal; consumed by wrapper |
+| `auth_success(current_user_data)` | `GDictionary` | |
+| `auth_failure(error_message)` | `String` | |
+| `sign_out_success(success)` | `Bool` | |
+| `link_with_google_success(current_user_data)` | `GDictionary` | |
+| `link_with_google_failure(error_message)` | `String` | |
+| `user_deleted(success)` | `Bool` | |
+
+---
+
+## Key Design Decisions
+
+**`RefCounted` instead of `Node`** — SwiftGodot GDExtension classes instantiated via `ClassDB.instantiate()` work more reliably as `RefCounted` since they do not need to be added to the scene tree.
+
+**Separate `initialize()` callable** — SwiftGodot does not support custom `init` with parameters. Firebase initialization requires `GoogleService-Info.plist`, which must be read after Godot's filesystem is available. The wrapper calls `initialize()` immediately after instantiation.
+
+**Anonymous re-sign behavior** — If a user is already signed in anonymously, `sign_in_anonymously()` returns existing session data rather than creating a new user, matching Android plugin behavior.
+
+---
+
+## Known Limitations
+
+- Google Sign-In requires a physical iOS device (arm64). The Simulator is not supported.
+- Email/Password authentication is not yet implemented (Android only).

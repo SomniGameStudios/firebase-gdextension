@@ -73,15 +73,8 @@ autoload/firebase_wrapper.gd
 
 ## 🔨 Building the iOS Plugin from Source
 
-After modifying Swift source files under `addons_source_code/GodotFirebaseiOS/`:
-
-```bash
-./scripts/build_ios_plugin.sh
-```
-
-This builds the Swift package with `xcodebuild` and copies the resulting `GodotFirebaseiOS.framework` into `demo/addons/GodotFirebaseiOS/` automatically.
-
-**Requirements:** Xcode 15+, Swift 5.9+, macOS 14+
+After modifying Swift source files under `addons_source_code/GodotFirebaseiOS/`, see the
+[Swift package README](addons_source_code/GodotFirebaseiOS/README.md) for build instructions.
 
 ---
 
