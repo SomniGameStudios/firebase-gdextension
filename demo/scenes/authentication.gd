@@ -8,8 +8,8 @@ func _ready() -> void:
 	FirebaseWrapper.auth_success.connect(_on_auth_success)
 	FirebaseWrapper.auth_failure.connect(_on_auth_failure)
 	FirebaseWrapper.sign_out_success.connect(_on_sign_out_success)
-	FirebaseWrapper.link_success.connect(_on_link_success)
-	FirebaseWrapper.link_failure.connect(_on_link_failure)
+	FirebaseWrapper.link_with_google_success.connect(_on_link_with_google_success)
+	FirebaseWrapper.link_with_google_failure.connect(_on_link_with_google_failure)
 	FirebaseWrapper.password_reset_sent.connect(_on_password_reset_sent)
 	FirebaseWrapper.email_verification_sent.connect(_on_email_verification_sent)
 	FirebaseWrapper.user_deleted.connect(_on_user_deleted)
@@ -27,11 +27,11 @@ func _on_auth_failure(error_message: String) -> void:
 func _on_sign_out_success(success: bool) -> void:
 	_log("sign_out_success", str(success))
 
-func _on_link_success(user_data: Dictionary) -> void:
-	_log("link_success", JSON.stringify(user_data))
+func _on_link_with_google_success(user_data: Dictionary) -> void:
+	_log("link_with_google_success", JSON.stringify(user_data))
 
-func _on_link_failure(error_message: String) -> void:
-	_log("link_failure", error_message)
+func _on_link_with_google_failure(error_message: String) -> void:
+	_log("link_with_google_failure", error_message)
 
 func _on_password_reset_sent(success: bool) -> void:
 	_log("password_reset_sent", str(success))

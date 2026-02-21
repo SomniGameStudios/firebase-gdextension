@@ -16,6 +16,8 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Signal("current_user_data") var auth_success: SignalWithArguments<GDictionary>
     @Signal("error_message") var auth_failure: SignalWithArguments<String>
     @Signal("success") var sign_out_success: SignalWithArguments<Bool>
+    @Signal("current_user_data") var link_with_google_success: SignalWithArguments<GDictionary>
+    @Signal("error_message") var link_with_google_failure: SignalWithArguments<String>
 
     private var isInitialized = false
 
@@ -94,21 +96,21 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Callable
     func link_anonymous_with_google() {
         guard isInitialized else {
-            auth_failure.emit("Firebase not initialized")
+            link_with_google_failure.emit("Firebase not initialized")
             return
         }
         guard let currentUser = Auth.auth().currentUser else {
-            auth_failure.emit("No user signed in")
+            link_with_google_failure.emit("No user signed in")
             return
         }
         guard currentUser.isAnonymous else {
-            auth_failure.emit("Current user is not anonymous. Use sign_in_with_google() instead")
+            link_with_google_failure.emit("Current user is not anonymous. Use sign_in_with_google() instead")
             return
         }
         performGoogleSignIn { [weak self] credential, error in
             guard let self else { return }
             if let error {
-                Task { @MainActor in self.auth_failure.emit(error) }
+                Task { @MainActor in self.link_with_google_failure.emit(error) }
                 return
             }
             guard let credential else { return }
@@ -119,14 +121,14 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
                         let nsError = error as NSError
                         // Already linked with this provider — treat as success
                         if nsError.code == AuthErrorCode.providerAlreadyLinked.rawValue {
-                            self.auth_success.emit(self.userToDict(currentUser))
+                            self.link_with_google_success.emit(self.userToDict(currentUser))
                             return
                         }
-                        self.auth_failure.emit(error.localizedDescription)
+                        self.link_with_google_failure.emit(error.localizedDescription)
                         return
                     }
                     guard let user = result?.user else { return }
-                    self.auth_success.emit(self.userToDict(user))
+                    self.link_with_google_success.emit(self.userToDict(user))
                 }
             }
         }

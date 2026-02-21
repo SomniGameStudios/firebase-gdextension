@@ -10,8 +10,8 @@ extends Node
 signal auth_success(current_user_data: Dictionary)
 signal auth_failure(error_message: String)
 signal sign_out_success(success: bool)
-signal link_success(current_user_data: Dictionary)
-signal link_failure(error_message: String)
+signal link_with_google_success(current_user_data: Dictionary)
+signal link_with_google_failure(error_message: String)
 signal password_reset_sent(success: bool)
 signal email_verification_sent(success: bool)
 signal user_deleted(success: bool)
@@ -56,10 +56,10 @@ func _on_android_auth_failure(msg: String) -> void:
 	auth_failure.emit(msg)
 
 func _on_android_link_success(user_dict: Dictionary) -> void:
-	link_success.emit(user_dict)
+	link_with_google_success.emit(user_dict)
 
 func _on_android_link_failure(msg: String) -> void:
-	link_failure.emit(msg)
+	link_with_google_failure.emit(msg)
 
 func _on_android_sign_out_success(success: bool) -> void:
 	sign_out_success.emit(success)
@@ -83,6 +83,8 @@ func _connect_ios_signals() -> void:
 	_ios_plugin.connect("auth_success", _on_ios_auth_success)
 	_ios_plugin.connect("auth_failure", _on_ios_auth_failure)
 	_ios_plugin.connect("sign_out_success", _on_ios_sign_out_success)
+	_ios_plugin.connect("link_with_google_success", _on_ios_link_success)
+	_ios_plugin.connect("link_with_google_failure", _on_ios_link_failure)
 
 func _on_ios_firebase_initialized() -> void:
 	print("Firebase: iOS initialized successfully")
@@ -98,6 +100,12 @@ func _on_ios_auth_failure(msg: String) -> void:
 
 func _on_ios_sign_out_success(success: bool) -> void:
 	sign_out_success.emit(success)
+
+func _on_ios_link_success(user_dict: Dictionary) -> void:
+	link_with_google_success.emit(user_dict)
+
+func _on_ios_link_failure(msg: String) -> void:
+	link_with_google_failure.emit(msg)
 
 # --- Helpers ---
 
