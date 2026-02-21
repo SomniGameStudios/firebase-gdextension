@@ -8,14 +8,18 @@ import UIKit
 
 @Godot
 class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
-    // Signals (same names as Android for wrapper compatibility)
+    // iOS-internal signals (not in GodotFirebaseAndroid API — used by wrapper internally)
     @Signal var firebase_initialized: SimpleSignal
     @Signal("message") var firebase_error: SignalWithArguments<String>
-    @Signal("user_json") var auth_success: SignalWithArguments<String>
-    @Signal("message") var auth_error: SignalWithArguments<String>
-    @Signal var signed_out: SimpleSignal
+
+    // Public signals — match GodotFirebaseAndroid Auth API exactly
+    @Signal("current_user_data") var auth_success: SignalWithArguments<GDictionary>
+    @Signal("error_message") var auth_failure: SignalWithArguments<String>
+    @Signal("success") var sign_out_success: SignalWithArguments<Bool>
 
     private var isInitialized = false
+
+    // MARK: - Initialization (iOS-specific, called by wrapper internally)
 
     @Callable
     func initialize() {
@@ -35,23 +39,25 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Callable
     func sign_in_anonymously() {
         guard isInitialized else {
-            auth_error.emit("Firebase not initialized")
+            auth_failure.emit("Firebase not initialized")
             return
         }
         // If a user is already signed in, return their data instead of creating a new session
         if let existingUser = Auth.auth().currentUser {
-            auth_success.emit(userToJson(existingUser))
+            Task { @MainActor in
+                self.auth_success.emit(self.userToDict(existingUser))
+            }
             return
         }
         Auth.auth().signInAnonymously { [weak self] result, error in
             guard let self else { return }
             Task { @MainActor in
                 if let error {
-                    self.auth_error.emit(error.localizedDescription)
+                    self.auth_failure.emit(error.localizedDescription)
                     return
                 }
                 guard let user = result?.user else { return }
-                self.auth_success.emit(self.userToJson(user))
+                self.auth_success.emit(self.userToDict(user))
             }
         }
     }
@@ -61,24 +67,26 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Callable
     func sign_in_with_google() {
         guard isInitialized else {
-            auth_error.emit("Firebase not initialized")
+            auth_failure.emit("Firebase not initialized")
             return
         }
         performGoogleSignIn { [weak self] credential, error in
             guard let self else { return }
             if let error {
-                self.auth_error.emit(error)
+                Task { @MainActor in self.auth_failure.emit(error) }
                 return
             }
             guard let credential else { return }
             Auth.auth().signIn(with: credential) { [weak self] result, error in
                 guard let self else { return }
-                if let error {
-                    self.auth_error.emit(error.localizedDescription)
-                    return
+                Task { @MainActor in
+                    if let error {
+                        self.auth_failure.emit(error.localizedDescription)
+                        return
+                    }
+                    guard let user = result?.user else { return }
+                    self.auth_success.emit(self.userToDict(user))
                 }
-                guard let user = result?.user else { return }
-                self.auth_success.emit(self.userToJson(user))
             }
         }
     }
@@ -86,38 +94,40 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Callable
     func link_anonymous_with_google() {
         guard isInitialized else {
-            auth_error.emit("Firebase not initialized")
+            auth_failure.emit("Firebase not initialized")
             return
         }
         guard let currentUser = Auth.auth().currentUser else {
-            auth_error.emit("No user signed in")
+            auth_failure.emit("No user signed in")
             return
         }
         guard currentUser.isAnonymous else {
-            auth_error.emit("Current user is not anonymous. Use sign_in_with_google() instead")
+            auth_failure.emit("Current user is not anonymous. Use sign_in_with_google() instead")
             return
         }
         performGoogleSignIn { [weak self] credential, error in
             guard let self else { return }
             if let error {
-                self.auth_error.emit(error)
+                Task { @MainActor in self.auth_failure.emit(error) }
                 return
             }
             guard let credential else { return }
             currentUser.link(with: credential) { [weak self] result, error in
                 guard let self else { return }
-                if let error {
-                    let nsError = error as NSError
-                    // Already linked with this provider — treat as success
-                    if nsError.code == AuthErrorCode.providerAlreadyLinked.rawValue {
-                        self.auth_success.emit(self.userToJson(currentUser))
+                Task { @MainActor in
+                    if let error {
+                        let nsError = error as NSError
+                        // Already linked with this provider — treat as success
+                        if nsError.code == AuthErrorCode.providerAlreadyLinked.rawValue {
+                            self.auth_success.emit(self.userToDict(currentUser))
+                            return
+                        }
+                        self.auth_failure.emit(error.localizedDescription)
                         return
                     }
-                    self.auth_error.emit(error.localizedDescription)
-                    return
+                    guard let user = result?.user else { return }
+                    self.auth_success.emit(self.userToDict(user))
                 }
-                guard let user = result?.user else { return }
-                self.auth_success.emit(self.userToJson(user))
             }
         }
     }
@@ -129,22 +139,20 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
         do {
             GIDSignIn.sharedInstance.signOut()
             try Auth.auth().signOut()
-            signed_out.emit()
+            sign_out_success.emit(true)
         } catch {
-            auth_error.emit(error.localizedDescription)
+            auth_failure.emit(error.localizedDescription)
         }
     }
 
     // MARK: - User State
 
     @Callable func is_signed_in() -> Bool { Auth.auth().currentUser != nil }
-    @Callable func is_anonymous() -> Bool { Auth.auth().currentUser?.isAnonymous ?? false }
-    @Callable func get_uid() -> String { Auth.auth().currentUser?.uid ?? "" }
 
     @Callable
-    func get_current_user() -> String {
-        guard let user = Auth.auth().currentUser else { return "{}" }
-        return userToJson(user)
+    func get_current_user_data() -> GDictionary {
+        guard let user = Auth.auth().currentUser else { return GDictionary() }
+        return userToDict(user)
     }
 
     // MARK: - Private Helpers
@@ -209,12 +217,13 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     }
     #endif
 
-    private func userToJson(_ user: FirebaseAuth.User) -> String {
-        let email = user.email ?? ""
-        let displayName = user.displayName ?? ""
-        let photoURL = user.photoURL?.absoluteString ?? ""
-        return """
-        {"uid":"\(user.uid)","email":"\(email)","displayName":"\(displayName)","photoURL":"\(photoURL)","isAnonymous":\(user.isAnonymous)}
-        """
+    private func userToDict(_ user: FirebaseAuth.User) -> GDictionary {
+        var dict = GDictionary()
+        dict[Variant("uid")] = Variant(user.uid)
+        dict[Variant("email")] = Variant(user.email ?? "")
+        dict[Variant("displayName")] = Variant(user.displayName ?? "")
+        dict[Variant("photoURL")] = Variant(user.photoURL?.absoluteString ?? "")
+        dict[Variant("isAnonymous")] = Variant(user.isAnonymous)
+        return dict
     }
 }

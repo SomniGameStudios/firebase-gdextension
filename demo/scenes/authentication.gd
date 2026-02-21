@@ -6,34 +6,32 @@ extends Control
 
 func _ready() -> void:
 	FirebaseWrapper.auth_success.connect(_on_auth_success)
-	FirebaseWrapper.auth_error.connect(_on_auth_error)
-	FirebaseWrapper.signed_out.connect(_on_signed_out)
+	FirebaseWrapper.auth_failure.connect(_on_auth_failure)
+	FirebaseWrapper.sign_out_success.connect(_on_sign_out_success)
 	FirebaseWrapper.link_success.connect(_on_link_success)
-	FirebaseWrapper.link_error.connect(_on_link_error)
+	FirebaseWrapper.link_failure.connect(_on_link_failure)
 	FirebaseWrapper.password_reset_sent.connect(_on_password_reset_sent)
 	FirebaseWrapper.email_verification_sent.connect(_on_email_verification_sent)
 	FirebaseWrapper.user_deleted.connect(_on_user_deleted)
-	FirebaseWrapper.firebase_initialized.connect(_on_firebase_initialized)
-	FirebaseWrapper.firebase_error.connect(_on_firebase_error)
 
 	_log("platform", FirebaseWrapper.get_platform_name())
 
 # --- Signal handlers ---
 
-func _on_auth_success(user_data: String) -> void:
-	_log("auth_success", user_data)
+func _on_auth_success(user_data: Dictionary) -> void:
+	_log("auth_success", JSON.stringify(user_data))
 
-func _on_auth_error(message: String) -> void:
-	_log("auth_error", message)
+func _on_auth_failure(error_message: String) -> void:
+	_log("auth_failure", error_message)
 
-func _on_signed_out() -> void:
-	_log("signed_out", "OK")
+func _on_sign_out_success(success: bool) -> void:
+	_log("sign_out_success", str(success))
 
-func _on_link_success(user_data: String) -> void:
-	_log("link_success", user_data)
+func _on_link_success(user_data: Dictionary) -> void:
+	_log("link_success", JSON.stringify(user_data))
 
-func _on_link_error(message: String) -> void:
-	_log("link_error", message)
+func _on_link_failure(error_message: String) -> void:
+	_log("link_failure", error_message)
 
 func _on_password_reset_sent(success: bool) -> void:
 	_log("password_reset_sent", str(success))
@@ -43,12 +41,6 @@ func _on_email_verification_sent(success: bool) -> void:
 
 func _on_user_deleted(success: bool) -> void:
 	_log("user_deleted", str(success))
-
-func _on_firebase_initialized() -> void:
-	_log("firebase_initialized", "OK")
-
-func _on_firebase_error(message: String) -> void:
-	_log("firebase_error", message)
 
 # --- Logging ---
 
@@ -102,24 +94,26 @@ func _on_password_reset_pressed() -> void:
 # --- Query ---
 
 func _on_get_user_pressed() -> void:
-	var user = FirebaseWrapper.get_current_user()
-	_log("get_current_user", user if user else "(no user)")
+	var user = FirebaseWrapper.get_current_user_data()
+	_log("get_current_user_data", JSON.stringify(user) if not user.is_empty() else "(no user)")
 
 func _on_get_uid_pressed() -> void:
-	var uid = FirebaseWrapper.get_uid()
-	_log("get_uid", uid if uid else "(no uid)")
+	var user = FirebaseWrapper.get_current_user_data()
+	var uid: String = user.get("uid", "")
+	_log("uid", uid if uid else "(no uid)")
 
 func _on_is_signed_in_pressed() -> void:
 	_log("is_signed_in", str(FirebaseWrapper.is_signed_in()))
 
 func _on_is_anonymous_pressed() -> void:
-	_log("is_anonymous", str(FirebaseWrapper.is_anonymous()))
+	var user = FirebaseWrapper.get_current_user_data()
+	_log("is_anonymous", str(user.get("isAnonymous", false)))
 
 # --- Sign-out / Delete ---
 
 func _on_sign_out_pressed() -> void:
 	_log("action", "Signing out...")
-	FirebaseWrapper.sign_out_user()
+	FirebaseWrapper.sign_out()
 
 func _on_delete_user_pressed() -> void:
 	_log("action", "Deleting current user...")

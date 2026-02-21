@@ -131,7 +131,7 @@ text = "Get Current User"
 layout_mode = 2
 custom_minimum_size = Vector2(0, 50)
 theme_override_font_sizes/font_size = 24
-text = "Get UID (iOS only)"
+text = "Get UID"
 
 [node name="IsSignedIn" type="Button" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -143,7 +143,7 @@ text = "Is Signed In"
 layout_mode = 2
 custom_minimum_size = Vector2(0, 50)
 theme_override_font_sizes/font_size = 24
-text = "Is Anonymous (iOS only)"
+text = "Is Anonymous"
 
 [node name="HSeparator4" type="HSeparator" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2

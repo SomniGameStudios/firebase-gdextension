@@ -6,17 +6,15 @@ extends Node
 ##   - iOS: GDExtension class "FirebaseAuthPlugin" (SwiftGodot framework)
 ##   - Desktop/editor: no-ops with warning
 
-# --- Unified auth signals (normalized across platforms) ---
-signal auth_success(user_data: String)
-signal auth_error(message: String)
-signal signed_out
-signal link_success(user_data: String)
-signal link_error(message: String)
+# --- Unified auth signals — match GodotFirebaseAndroid Auth API exactly ---
+signal auth_success(current_user_data: Dictionary)
+signal auth_failure(error_message: String)
+signal sign_out_success(success: bool)
+signal link_success(current_user_data: Dictionary)
+signal link_failure(error_message: String)
 signal password_reset_sent(success: bool)
 signal email_verification_sent(success: bool)
 signal user_deleted(success: bool)
-signal firebase_initialized
-signal firebase_error(message: String)
 
 enum Platform { NONE, ANDROID, IOS }
 
@@ -52,19 +50,19 @@ func _connect_android_signals() -> void:
 	_android_plugin.connect("user_deleted", _on_android_user_deleted)
 
 func _on_android_auth_success(user_dict: Dictionary) -> void:
-	auth_success.emit(JSON.stringify(user_dict))
+	auth_success.emit(user_dict)
 
 func _on_android_auth_failure(msg: String) -> void:
-	auth_error.emit(msg)
+	auth_failure.emit(msg)
 
 func _on_android_link_success(user_dict: Dictionary) -> void:
-	link_success.emit(JSON.stringify(user_dict))
+	link_success.emit(user_dict)
 
 func _on_android_link_failure(msg: String) -> void:
-	link_error.emit(msg)
+	link_failure.emit(msg)
 
-func _on_android_sign_out_success(_success: bool) -> void:
-	signed_out.emit()
+func _on_android_sign_out_success(success: bool) -> void:
+	sign_out_success.emit(success)
 
 func _on_android_password_reset_sent(success: bool) -> void:
 	password_reset_sent.emit(success)
@@ -78,26 +76,28 @@ func _on_android_user_deleted(success: bool) -> void:
 # --- iOS signal connections ---
 
 func _connect_ios_signals() -> void:
+	# Internal iOS signals (log only, not part of public API)
 	_ios_plugin.connect("firebase_initialized", _on_ios_firebase_initialized)
 	_ios_plugin.connect("firebase_error", _on_ios_firebase_error)
+	# Public signals — match Android API
 	_ios_plugin.connect("auth_success", _on_ios_auth_success)
-	_ios_plugin.connect("auth_error", _on_ios_auth_error)
-	_ios_plugin.connect("signed_out", _on_ios_signed_out)
+	_ios_plugin.connect("auth_failure", _on_ios_auth_failure)
+	_ios_plugin.connect("sign_out_success", _on_ios_sign_out_success)
 
 func _on_ios_firebase_initialized() -> void:
-	firebase_initialized.emit()
+	print("Firebase: iOS initialized successfully")
 
 func _on_ios_firebase_error(msg: String) -> void:
-	firebase_error.emit(msg)
+	push_error("Firebase: iOS initialization error: " + msg)
 
-func _on_ios_auth_success(json: String) -> void:
-	auth_success.emit(json)
+func _on_ios_auth_success(user_dict: Dictionary) -> void:
+	auth_success.emit(user_dict)
 
-func _on_ios_auth_error(msg: String) -> void:
-	auth_error.emit(msg)
+func _on_ios_auth_failure(msg: String) -> void:
+	auth_failure.emit(msg)
 
-func _on_ios_signed_out() -> void:
-	signed_out.emit()
+func _on_ios_sign_out_success(success: bool) -> void:
+	sign_out_success.emit(success)
 
 # --- Helpers ---
 
@@ -127,7 +127,7 @@ func link_anonymous_with_google() -> void:
 		Platform.ANDROID: _android_plugin.linkAnonymousWithGoogle()
 		Platform.IOS: _ios_plugin.link_anonymous_with_google()
 
-func sign_out_user() -> void:
+func sign_out() -> void:
 	match _platform:
 		Platform.ANDROID: _android_plugin.signOut()
 		Platform.IOS: _ios_plugin.sign_out()
@@ -138,26 +138,13 @@ func is_signed_in() -> bool:
 		Platform.IOS: return _ios_plugin.is_signed_in()
 	return false
 
-func get_current_user() -> String:
+func get_current_user_data() -> Dictionary:
 	match _platform:
 		Platform.ANDROID:
-			var user_dict: Dictionary = _android_plugin.getCurrentUser()
-			return JSON.stringify(user_dict)
+			return _android_plugin.getCurrentUser()
 		Platform.IOS:
-			return _ios_plugin.get_current_user()
-	return ""
-
-# --- iOS-only methods ---
-
-func is_anonymous() -> bool:
-	if _platform == Platform.IOS:
-		return _ios_plugin.is_anonymous()
-	return false
-
-func get_uid() -> String:
-	if _platform == Platform.IOS:
-		return _ios_plugin.get_uid()
-	return ""
+			return _ios_plugin.get_current_user_data()
+	return {}
 
 # --- Android-only methods ---
 
