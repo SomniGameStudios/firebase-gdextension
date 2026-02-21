@@ -1,142 +1,171 @@
 # Firebase Mobile Integration Demo
 
-A Godot 4.6 demo showing Firebase Authentication on **both iOS and Android** from a single project, using two different native plugin approaches.
+A Godot 4.4+ project demonstrating Firebase Authentication on **iOS and Android** from a single codebase.
 
-> **Project structure**: The Godot project lives in the [`demo/`](demo/) folder. Open `demo/project.godot` in the Godot editor. Native plugin source code is in [`addons_source_code/`](addons_source_code/).
+> The Godot project lives in [`demo/`](demo/). Open `demo/project.godot` in the Godot editor.
+> iOS plugin source is in [`addons_source_code/GodotFirebaseiOS/`](addons_source_code/GodotFirebaseiOS/).
 
-Firebase Authentication on both iOS and Android, using two different native plugin approaches:
+## Features
 
-- **iOS**: SwiftGodot GDExtension (`FirebaseAuthPlugin` registered in ClassDB)
-- **Android**: Kotlin Engine singleton (`GodotFirebaseAndroid` via `Engine.get_singleton()`)
+- [x] Anonymous Sign-In (iOS + Android)
+- [x] Google Sign-In (iOS + Android)
+- [x] Link Anonymous → Google (iOS + Android)
+- [x] Sign Out (iOS + Android)
+- [x] Delete Account (iOS + Android)
+- [x] Email/Password Auth (Android only)
+- [ ] Email/Password Auth (iOS — coming soon)
 
-A unified wrapper autoload detects the platform at runtime and delegates to the correct backend.
-
-## Purpose
-
-This project serves two purposes:
-
-1. **Demonstrate cross-platform Firebase integration** using a single Godot project with platform-specific native plugins. Shows that the SwiftGodot GDExtension approach for iOS is simpler (fewer files, less boilerplate, real typed classes) compared to the Engine singleton pattern used on Android.
-
-2. **Provide a reference for platform-specific GDExtension plugins** and the challenges discussed in [godotengine/godot#105615](https://github.com/godotengine/godot/issues/105615).
-
-Built on top of [GodotFirebaseAndroid](https://github.com/syntaxerror247/GodotFirebaseAndroid) by Anish Mishra.
+---
 
 ## Architecture
 
+A unified `FirebaseWrapper` autoload detects the platform at runtime and delegates to the correct native backend:
+
+- **iOS** — SwiftGodot GDExtension (`FirebaseAuthPlugin` registered in ClassDB)
+- **Android** — Kotlin Engine singleton ([GodotFirebaseAndroid](https://github.com/syntaxerror247/GodotFirebaseAndroid) by Anish Mishra)
+
 ```
-autoload/firebase_wrapper.gd    ← "Firebase" autoload singleton
-    │
-    ├─ Android: Engine.has_singleton("GodotFirebaseAndroid")
-    │           → calls Java-style methods on Kotlin plugin
-    │
-    └─ iOS:    ClassDB.class_exists("FirebaseAuthPlugin")
-               → calls snake_case methods on SwiftGodot class
+autoload/firebase_wrapper.gd
+    ├── Android: Engine.get_singleton("GodotFirebaseAndroid")
+    └── iOS:     ClassDB.instantiate("FirebaseAuthPlugin")
 ```
 
-### GDExtension vs Engine Singleton Comparison
+---
 
-| Aspect | Android (Engine Singleton) | iOS (GDExtension) |
-|--------|---------------------------|-------------------|
-| Registration | `Engine.get_singleton("Name")` | `ClassDB.class_exists("Name")` |
-| Instantiation | Opaque `Object` from Engine | `ClassDB.instantiate()` → typed `RefCounted` |
-| Method naming | Java-style (`signInAnonymously`) | Godot snake_case (`sign_in_anonymously`) |
-| Editor support | No autocomplete, no type info | RefCounted subclass, editor-friendly |
-| Boilerplate | Export plugin + Gradle injection + AAR | Single `.gdextension` file + framework |
-| Signal data | Native `Dictionary` | JSON `String` |
-
-## Requirements
-
-**Both platforms:**
-- Godot 4.4+
-- Firebase project with Authentication enabled
-
-**iOS:**
-- Xcode 15+, Swift 5.9+
-- iOS 17+ device (arm64)
-
-**Android:**
-- Android SDK, Gradle
-- Android device or emulator (arm64-v8a)
-
-## Setup
+## 🚀 Quick Start
 
 ### 1. Firebase Console
 
-- Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-- Enable **Anonymous** and **Google Sign-In** providers under Authentication > Sign-in method
+- Go to [console.firebase.google.com](https://console.firebase.google.com)
+- Create a project and enable **Authentication → Sign-in Methods**: **Anonymous** and **Google**
+
+---
 
 ### 2. iOS Setup
 
-- Register an iOS app in Firebase, download `GoogleService-Info.plist`
-- Place it in the `demo/` folder (the Godot project root)
-- After exporting from Godot, in the Xcode trampoline project add a `CFBundleURLTypes` entry with your `REVERSED_CLIENT_ID` from `GoogleService-Info.plist`
-- Build and deploy to device
+**a) Download credentials**
+- Register an iOS app in the Firebase Console
+- Download `GoogleService-Info.plist`
+- Place it in `demo/addons/GodotFirebaseiOS/` (gitignored — never commit)
+
+**b) Enable the plugin**
+- In Godot: **Project → Project Settings → Plugins** → enable **GodotFirebaseiOS**
+
+**c) Export**
+- Export for iOS from Godot — the export plugin automatically:
+  - Copies `GoogleService-Info.plist` into the Xcode project (Copy Bundle Resources)
+  - Injects the `REVERSED_CLIENT_ID` URL scheme into `Info.plist` (required for Google Sign-In)
+- Build and run in Xcode on a physical device (arm64)
+
+---
 
 ### 3. Android Setup
 
-- Register an Android app in Firebase, download `google-services.json`
-- Place it in `demo/android/build/google-services.json` (after creating the Android export template)
-- Enable Gradle build in export settings
-- Build and deploy to device
+- Register an Android app in the Firebase Console
+- Download `google-services.json` and place it in:
+  ```
+  demo/android/build/google-services.json
+  ```
+- Follow the [GodotFirebaseAndroid setup guide](https://syntaxerror247.github.io/GodotFirebaseAndroid)
+- Enable Gradle build in **Project → Export → Android**
 
-## GDScript API
+---
 
-All methods are available through the `Firebase` autoload:
+## 🔨 Building the iOS Plugin from Source
 
-```gdscript
-# Sign-in (both platforms)
-Firebase.sign_in_anonymously()
-Firebase.sign_in_with_google()
-Firebase.link_anonymous_with_google()
-Firebase.sign_out_user()
-Firebase.is_signed_in()         # -> bool
-Firebase.get_current_user()     # -> String (JSON)
+After modifying Swift source files under `addons_source_code/GodotFirebaseiOS/`:
 
-# iOS only
-Firebase.is_anonymous()         # -> bool
-Firebase.get_uid()              # -> String
-
-# Android only
-Firebase.create_user_with_email_password(email, password)
-Firebase.sign_in_with_email_password(email, password)
-Firebase.send_password_reset_email(email)
-Firebase.send_email_verification()
-Firebase.delete_current_user()
-
-# Helpers
-Firebase.is_available()         # -> bool
-Firebase.get_platform_name()    # -> "Android" | "iOS" | "None"
+```bash
+./scripts/build_ios_plugin.sh
 ```
 
-### Signals
+This builds the Swift package with `xcodebuild` and copies the resulting `GodotFirebaseiOS.framework` into `demo/addons/GodotFirebaseiOS/` automatically.
+
+**Requirements:** Xcode 15+, Swift 5.9+, macOS 14+
+
+---
+
+## 📖 GDScript API
+
+All methods and signals are available through the `FirebaseWrapper` autoload.
+
+### Methods — Both Platforms
 
 ```gdscript
-# Both platforms
-Firebase.auth_success(user_data: String)   # JSON user data
-Firebase.auth_error(message: String)
-Firebase.signed_out
-
-# Link-specific (Android emits separately, iOS uses auth_success/auth_error)
-Firebase.link_success(user_data: String)
-Firebase.link_error(message: String)
-
-# Android only
-Firebase.password_reset_sent(success: bool)
-Firebase.email_verification_sent(success: bool)
-Firebase.user_deleted(success: bool)
-
-# iOS only
-Firebase.firebase_initialized
-Firebase.firebase_error(message: String)
+FirebaseWrapper.sign_in_anonymously()
+FirebaseWrapper.sign_in_with_google()
+FirebaseWrapper.link_anonymous_with_google()
+FirebaseWrapper.sign_out()
+FirebaseWrapper.delete_current_user()
+FirebaseWrapper.is_signed_in()           # -> bool
+FirebaseWrapper.get_current_user_data()  # -> Dictionary
+FirebaseWrapper.is_available()           # -> bool
+FirebaseWrapper.get_platform_name()      # -> "Android" | "iOS" | "None"
 ```
 
-## Platform-Specific GDExtension Notes (godot#105615)
+### Methods — Android Only
 
-The iOS plugin uses a `.gdextension` file that only declares `ios.debug` and `ios.release` libraries. On non-iOS platforms:
+```gdscript
+FirebaseWrapper.create_user_with_email_password(email, password)
+FirebaseWrapper.sign_in_with_email_password(email, password)
+FirebaseWrapper.send_password_reset_email(email)
+FirebaseWrapper.send_email_verification()
+```
 
-- The `FirebaseAuthPlugin` class is not registered in ClassDB
-- The wrapper detects this via `ClassDB.class_exists()` and falls back gracefully
-- **Known issue**: Godot's GDExtension loader may emit warnings about missing libraries for the current platform. See [godotengine/godot#105615](https://github.com/godotengine/godot/issues/105615).
+### Signals — Both Platforms
+
+```gdscript
+FirebaseWrapper.auth_success(current_user_data: Dictionary)
+FirebaseWrapper.auth_failure(error_message: String)
+FirebaseWrapper.sign_out_success(success: bool)
+FirebaseWrapper.link_with_google_success(current_user_data: Dictionary)
+FirebaseWrapper.link_with_google_failure(error_message: String)
+FirebaseWrapper.user_deleted(success: bool)
+```
+
+### Signals — Android Only
+
+```gdscript
+FirebaseWrapper.password_reset_sent(success: bool)
+FirebaseWrapper.email_verification_sent(success: bool)
+```
+
+### User Data Dictionary
+
+`auth_success` and `get_current_user_data()` return a `Dictionary` with:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `uid` | `String` | Firebase user ID |
+| `email` | `String` | User email (empty for anonymous users) |
+| `displayName` | `String` | Display name |
+| `photoURL` | `String` | Profile photo URL |
+| `isAnonymous` | `bool` | Whether the account is anonymous |
+
+### Example
+
+```gdscript
+func _ready() -> void:
+    FirebaseWrapper.auth_success.connect(_on_auth_success)
+    FirebaseWrapper.auth_failure.connect(_on_auth_failure)
+
+func _on_auth_success(user_data: Dictionary) -> void:
+    print("Signed in: ", user_data.get("uid", ""))
+
+func _on_auth_failure(error_message: String) -> void:
+    print("Auth failed: ", error_message)
+
+# Sign in anonymously
+FirebaseWrapper.sign_in_anonymously()
+
+# Sign in with Google
+FirebaseWrapper.sign_in_with_google()
+
+# Upgrade anonymous account to Google
+FirebaseWrapper.link_anonymous_with_google()
+```
+
+---
 
 ## License
 

@@ -18,6 +18,7 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
     @Signal("success") var sign_out_success: SignalWithArguments<Bool>
     @Signal("current_user_data") var link_with_google_success: SignalWithArguments<GDictionary>
     @Signal("error_message") var link_with_google_failure: SignalWithArguments<String>
+    @Signal("success") var user_deleted: SignalWithArguments<Bool>
 
     private var isInitialized = false
 
@@ -144,6 +145,30 @@ class FirebaseAuthPlugin: RefCounted, @unchecked Sendable {
             sign_out_success.emit(true)
         } catch {
             auth_failure.emit(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Delete User
+
+    @Callable
+    func delete_current_user() {
+        guard isInitialized else {
+            auth_failure.emit("Firebase not initialized")
+            return
+        }
+        guard let user = Auth.auth().currentUser else {
+            auth_failure.emit("No user signed in")
+            return
+        }
+        user.delete { [weak self] error in
+            guard let self else { return }
+            Task { @MainActor in
+                if let error {
+                    self.auth_failure.emit(error.localizedDescription)
+                    return
+                }
+                self.user_deleted.emit(true)
+            }
         }
     }
 

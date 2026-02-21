@@ -85,6 +85,7 @@ func _connect_ios_signals() -> void:
 	_ios_plugin.connect("sign_out_success", _on_ios_sign_out_success)
 	_ios_plugin.connect("link_with_google_success", _on_ios_link_success)
 	_ios_plugin.connect("link_with_google_failure", _on_ios_link_failure)
+	_ios_plugin.connect("user_deleted", _on_ios_user_deleted)
 
 func _on_ios_firebase_initialized() -> void:
 	print("Firebase: iOS initialized successfully")
@@ -106,6 +107,9 @@ func _on_ios_link_success(user_dict: Dictionary) -> void:
 
 func _on_ios_link_failure(msg: String) -> void:
 	link_with_google_failure.emit(msg)
+
+func _on_ios_user_deleted(success: bool) -> void:
+	user_deleted.emit(success)
 
 # --- Helpers ---
 
@@ -173,5 +177,6 @@ func send_email_verification() -> void:
 		_android_plugin.sendEmailVerification()
 
 func delete_current_user() -> void:
-	if _platform == Platform.ANDROID:
-		_android_plugin.deleteUser()
+	match _platform:
+		Platform.ANDROID: _android_plugin.deleteUser()
+		Platform.IOS: _ios_plugin.delete_current_user()
